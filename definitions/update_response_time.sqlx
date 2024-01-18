@@ -1,0 +1,7 @@
+config {
+  type: "declaration",
+  database: "h3-data-logging",
+  schema: "test_sit_log_api_stats",
+  name: "ghcnd_2020",
+  description: "Test Description"
+}
