@@ -10,7 +10,7 @@ config {
 
 -- The rest of a SQLX file contains your SELECT statement used to create the table.
 
-SELECT CAST(CURRENT_TIMESTAMP() AS string) as test
+SELECT CURRENT_TIMESTAMP() AS test
 -- SELECT
 --   *
 -- FROM
