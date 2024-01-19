@@ -2,19 +2,17 @@ config {
     type: "incremental"
 }
 
-DECLARE event_timestamp_checkpoint DEFAULT TIMESTAMP("2000-01-01 00:00:00 UTC");
-SET event_timestamp_checkpoint = (
-${when(incremental(),
-`SELECT max(timestamp) FROM ${self()}`,
-`SELECT TIMESTAMP("2000-01-01 00:00:00 UTC")`)}
-);
+-- DECLARE event_timestamp_checkpoint DEFAULT TIMESTAMP("2000-01-01 00:00:00 UTC");
+-- SET event_timestamp_checkpoint = (
+-- ${when(incremental(),
+-- `SELECT max(timestamp) FROM ${self()}`,
+-- `SELECT TIMESTAMP("2000-01-01 00:00:00 UTC")`)}
+-- );
 SELECT
   *
 FROM
   `h3-data-logging.schedule_query_result.sample_logs_tbl`
-  --${when(incremental(), `WHERE timestamp > (SELECT MAX(timestamp) FROM ${self()})`)}
-WHERE
-  timestamp > event_timestamp_checkpoint
+  ${ when(incremental(), `WHERE timestamp > IFNULL((SELECT MAX(timestamp) FROM ${self()}), (SELECT TIMESTAMP("2000-01-01 00:00:00 UTC")))`) }
 ORDER BY
   timestamp ASC
 LIMIT
