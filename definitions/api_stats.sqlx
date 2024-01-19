@@ -3,10 +3,26 @@ config {
 }
 
 SELECT
-  *
+            timestamp,
+--            REGEXP_EXTRACT( REGEXP_REPLACE(REGEXP_REPLACE(rl.rq_body, ' = ', '='), '\'', '"'), 'client-id="([0-9]+)"') AS clientId,
+--            REGEXP_EXTRACT( REGEXP_REPLACE(REGEXP_REPLACE(rl.rq_body, ' = ', '='), '\'', '"'), '[<transaction ].+[a-zA-Z0-9"]+ id="([0-9]+)[a-zA-Z0-9"]+[>]*"') AS txnId,
+            rl.r_type,
+            rl.trace_id,
+            rl.url,
+            rq_body,
+            CASE
+                WHEN (rl.rq_body LIKE "%<device_data_info>%") THEN "YES"
+                END
+                AS is_ddc,
+            CASE
+                WHEN (JSON_EXTRACT_SCALAR(rl.rq_body, '$.fraud_type') = '200') THEN "PRE_FRAUD"
+                WHEN (JSON_EXTRACT_SCALAR(rl.rq_body, '$.fraud_type') = '201') THEN "POST_FRAUD"
+                END fraud_type
 FROM
-  `h3-data-logging.schedule_query_result.sample_logs_tbl`
+  `h3-data-logging.schedule_query_result.sample_logs_tbl` AS rl
   ${ when(incremental(), `WHERE timestamp > IFNULL((SELECT MAX(timestamp) FROM ${self()}), (SELECT TIMESTAMP("2000-01-01 00:00:00 UTC")))`) }
+
+
 ORDER BY
   timestamp ASC
 LIMIT
