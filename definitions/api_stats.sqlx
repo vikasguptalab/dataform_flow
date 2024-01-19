@@ -2,28 +2,88 @@ config {
     type: "incremental"
 }
 
+WITH
+  logData_RQ AS (
+  SELECT
+    timestamp,
+    REGEXP_EXTRACT( REGEXP_REPLACE(REGEXP_REPLACE(rl.rq_body, ' = ', '='), '\'', '"'), 'client-id="([0-9]+)"') AS clientId,
+    REGEXP_EXTRACT( REGEXP_REPLACE(REGEXP_REPLACE(rl.rq_body, ' = ', '='), '\'', '"'), '[<transaction ].+[a-zA-Z0-9"]+ id="([0-9]+)[a-zA-Z0-9"]+[>]*"') AS txnId,
+    rl.r_type,
+    rl.trace_id,
+    rl.url,
+    rq_body,
+    CASE
+      WHEN (rl.rq_body LIKE "%<device_data_info>%") THEN "YES"
+  END
+    AS is_ddc,
+    CASE
+      WHEN (JSON_EXTRACT_SCALAR(rl.rq_body, '$.fraud_type') = '200') THEN "PRE_FRAUD"
+      WHEN (JSON_EXTRACT_SCALAR(rl.rq_body, '$.fraud_type') = '201') THEN "POST_FRAUD"
+  END
+    fraud_type
+  FROM
+    `h3-data-logging.schedule_query_result.sample_logs_tbl` AS rl ${when(incremental(), `WHERE timestamp > IFNULL((SELECT MAX(timestamp) FROM ${self()}), (SELECT TIMESTAMP("2000-01-01 00:00:00 UTC")))`)}
+  ORDER BY
+    timestamp ASC
+  LIMIT
+    30000 ), 
+logDataFilter AS (
+  SELECT
+    l.clientID,
+    l.txnID,
+    cpdLogs.trace_id AS CPD_trace_id,
+    cpdLogs.url AS CPD_url,
+    CAST(cpdLogs.rs_response_time AS INT64) AS API_responseTime,
+    cpdLogs.rq_body AS CPD_body,
+    cpdLogs.timestamp AS CPD_timestamp,
+    l.is_ddc,
+    CASE
+      WHEN (cpdLogs.rq_body LIKE '%code="2005"%' OR cpdLogs.rq_body LIKE "%3D Secure Verification Required%" ) THEN "YES"
+  END
+    AS is_3ds,
+    CASE
+      WHEN cpdLogs.url LIKE ("/mconsole/") THEN 'VISION_API_CALL'
+      WHEN cpdLogs.url IN ("/mpoint/capture-payment",
+      "/mpoint/authorize-payment",
+      "/mpoint/bulk-refund",
+      "/mpoint/refund",
+      "/mpoint/void") THEN 'API_CALL'
+      WHEN (cpdLogs.url LIKE "https%" AND cpdLogs.url LIKE ("%/fraud/routing/fraudRoute%")) THEN 'FRAUD_EXTERNAL_CALL'
+      WHEN ( cpdLogs.url LIKE "https%"
+      AND (cpdLogs.url NOT LIKE "%cellpoint.cloud%"
+        AND cpdLogs.url NOT LIKE "%.sit.cpm.dev%"
+        AND cpdLogs.url NOT LIKE "%cellpoint.app%") ) THEN "EXTERNAL_CALL"
+    ELSE
+    "INTERNAL_CALL"
+  END
+    call_type,
+    CASE
+      WHEN (cpdLogs.rq_body LIKE '%code="2005"%' OR cpdLogs.rq_body LIKE "%3D Secure Verification Required%" ) THEN "3DS_PENDING"
+      WHEN (cpdLogs.rq_body LIKE '%code="200501"%'
+      OR cpdLogs.rq_body LIKE "%DDC verification%" ) THEN "DDC_PENDING"
+      WHEN (cpdLogs.rq_body LIKE "%Payment authorized%") THEN "SUCCESS"
+      WHEN (cpdLogs.rq_body LIKE '%code="2010"%'
+      OR REGEXP_CONTAINS(cpdLogs.rq_body,'Declined|rejected' )) THEN 'REJECTED'
+      WHEN (cpdLogs.rq_body LIKE '%code="2016"%' OR REGEXP_CONTAINS(cpdLogs.rq_body,'Failed' )) THEN 'OTHER_FAILED'
+      WHEN (REGEXP_CONTAINS(cpdLogs.rq_body,'Failed|failed' )) THEN 'ERROR_FAILED'
+    ELSE
+    ''
+  END
+    AS call_status
+  FROM
+    `logData_RQ` AS l
+  LEFT JOIN
+    `h3-data-logging.schedule_query_result.sample_logs_tbl` cpdLogs
+  ON
+    cpdLogs.trace_id = l.trace_id
+  WHERE
+    cpdLogs.timestamp >= l.timestamp
+    AND cpdLogs.r_type = 'response'
+    AND cpdLogs.url = l.url
+    AND (cpdLogs.url NOT LIKE ('%views/redirect_response.php')
+      OR cpdLogs.url NOT LIKE ('%/callback/')
+      OR cpdLogs.url NOT LIKE ('%/authorize.php')) )
 SELECT
-            timestamp,
---            REGEXP_EXTRACT( REGEXP_REPLACE(REGEXP_REPLACE(rl.rq_body, ' = ', '='), '\'', '"'), 'client-id="([0-9]+)"') AS clientId,
---            REGEXP_EXTRACT( REGEXP_REPLACE(REGEXP_REPLACE(rl.rq_body, ' = ', '='), '\'', '"'), '[<transaction ].+[a-zA-Z0-9"]+ id="([0-9]+)[a-zA-Z0-9"]+[>]*"') AS txnId,
-            rl.r_type,
-            rl.trace_id,
-            rl.url,
-            rq_body,
-            CASE
-                WHEN (rl.rq_body LIKE "%<device_data_info>%") THEN "YES"
-                END
-                AS is_ddc,
-            CASE
-                WHEN (JSON_EXTRACT_SCALAR(rl.rq_body, '$.fraud_type') = '200') THEN "PRE_FRAUD"
-                WHEN (JSON_EXTRACT_SCALAR(rl.rq_body, '$.fraud_type') = '201') THEN "POST_FRAUD"
-                END fraud_type
+  *
 FROM
-  `h3-data-logging.schedule_query_result.sample_logs_tbl` AS rl
-  ${ when(incremental(), `WHERE timestamp > IFNULL((SELECT MAX(timestamp) FROM ${self()}), (SELECT TIMESTAMP("2000-01-01 00:00:00 UTC")))`) }
-
-
-ORDER BY
-  timestamp ASC
-LIMIT
-  3
+  logDataFilter
