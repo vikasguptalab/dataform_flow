@@ -5,13 +5,13 @@ config {
 WITH
   logData_RQ AS (
   SELECT
-    timestamp,
+    timestamp AS rq_timestamp,
     REGEXP_EXTRACT( REGEXP_REPLACE(REGEXP_REPLACE(rl.rq_body, ' = ', '='), '\'', '"'), 'client-id="([0-9]+)"') AS clientId,
     REGEXP_EXTRACT( REGEXP_REPLACE(REGEXP_REPLACE(rl.rq_body, ' = ', '='), '\'', '"'), '[<transaction ].+[a-zA-Z0-9"]+ id="([0-9]+)[a-zA-Z0-9"]+[>]*"') AS txnId,
     rl.r_type,
     rl.trace_id,
     rl.url,
-    rq_body,
+    rl.rq_body,
     CASE
       WHEN (rl.rq_body LIKE "%<device_data_info>%") THEN "YES"
   END
@@ -26,16 +26,16 @@ WITH
   ORDER BY
     timestamp ASC
   LIMIT
-    30000 ), 
+    3 ), 
 logDataFilter AS (
   SELECT
     l.clientID,
     l.txnID,
-    cpdLogs.trace_id AS CPD_trace_id,
-    cpdLogs.url AS CPD_url,
-    CAST(cpdLogs.rs_response_time AS INT64) AS API_responseTime,
-    cpdLogs.rq_body AS CPD_body,
-    cpdLogs.timestamp AS CPD_timestamp,
+    cpdLogs.trace_id,
+    cpdLogs.url AS url,
+    CAST(cpdLogs.rs_response_time AS INT64) AS responseTime,
+    --cpdLogs.rq_body AS CPD_body,
+    cpdLogs.timestamp AS timestamp,
     l.is_ddc,
     CASE
       WHEN (cpdLogs.rq_body LIKE '%code="2005"%' OR cpdLogs.rq_body LIKE "%3D Secure Verification Required%" ) THEN "YES"
@@ -77,7 +77,7 @@ logDataFilter AS (
   ON
     cpdLogs.trace_id = l.trace_id
   WHERE
-    cpdLogs.timestamp >= l.timestamp
+    cpdLogs.timestamp >= l.rq_timestamp
     AND cpdLogs.r_type = 'response'
     AND cpdLogs.url = l.url
     AND (cpdLogs.url NOT LIKE ('%views/redirect_response.php')
