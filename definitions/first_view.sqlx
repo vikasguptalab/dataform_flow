@@ -5,7 +5,8 @@
 
 -- Config blocks allow you to configure, document, and test your data assets.
 config {
-  type: "incremental" // Creates a view in BigQuery. Try changing to "table" instead.  
+  type: "table", // Creates a view in BigQuery. Try changing to "table" instead.  
+  disabled: true
 }
 
 -- The rest of a SQLX file contains your SELECT statement used to create the table.

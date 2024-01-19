@@ -1,0 +1,9 @@
+config {
+    type: "incremental"
+}
+
+SELECT
+  *
+FROM
+  `h3-data-logging.schedule_query_result.sample_logs_tbl` 
+  ${when(incremental(), `WHERE timestamp > (SELECT MAX(timestamp) FROM ${self()})`)}

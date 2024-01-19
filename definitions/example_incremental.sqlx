@@ -1,6 +1,0 @@
-config { type: "incremental" }
-
-SELECT timestamp, trace_id, url
-FROM `test_sit_log_api_stats.sit-logs-temp`
-
-${ when(incremental(), `WHERE timestamp > (SELECT MAX(timestamp) FROM ${self()})`) }
