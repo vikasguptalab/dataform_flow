@@ -26,8 +26,8 @@ WITH
   ORDER BY
     timestamp ASC
   LIMIT
-    100 ), 
-logDataFilter AS (
+    100 ),
+  logDataFilter AS (
   SELECT
     l.clientID,
     l.txnID,
