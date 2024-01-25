@@ -1,0 +1,6 @@
+{
+  "name": "test64-sit-logs",
+  "dependencies": {
+    "@dataform/core": "2.8.3"
+  }
+}

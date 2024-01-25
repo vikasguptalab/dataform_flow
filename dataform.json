@@ -1,0 +1,8 @@
+{
+  "defaultSchema": "test_sit_log_api_stats",
+  "assertionSchema": "dataform_assertions",
+  "warehouse": "bigquery",
+  "defaultDatabase": "h3-data-logging",
+  "defaultLocation": "us-west1"
+}
+    
